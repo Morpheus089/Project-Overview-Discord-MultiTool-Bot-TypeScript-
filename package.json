@@ -1,0 +1,32 @@
+{
+  "name": "discord-bot-supreme",
+  "version": "1.0.0",
+  "description": "Bot Discord multilingue - Sans commentaires - Bilingue FR/EN",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "npm run build && npm start",
+    "clean": "if exist dist rmdir /s /q dist"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.3.1",
+    "winston": "^3.11.0",
+    "mysql2": "^3.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "typescript": "^5.3.3"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "typescript",
+    "multilingual",
+    "french",
+    "english"
+  ],
+  "author": "MiniMax Agent",
+  "license": "MIT"
+}
