@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, PermissionFlagsBits } from 'discord.js';
 import { Command } from '../structures/Command';
+import { EmbedBuilder } from '../utils/EmbedBuilder';
 
 export class KickCommand extends Command {
   constructor() {
@@ -37,54 +38,76 @@ export class KickCommand extends Command {
     const guildId = interaction.guild?.id || '';
     const translationService = (this.bot as any).translationService;
     
-    const targetUser = interaction.options.getUser('user');
-    const reason = interaction.options.getString('reason') || 'No reason specified';
-
-    if (!targetUser || !interaction.guild) {
-      const message = translationService.t(guildId, 'messages.invalidMember');
-      await interaction.reply({ content: message, ephemeral: true });
-      return;
-    }
-
-    const moderator = interaction.member;
-    const targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
-
-    if (targetUser.id === interaction.user.id) {
-      await interaction.reply({ content: 'You cannot kick yourself.', ephemeral: true });
-      return;
-    }
-
-    if (targetUser.id === interaction.guild.ownerId) {
-      await interaction.reply({ content: 'You cannot kick the server owner.', ephemeral: true });
-      return;
-    }
-
-    if (!targetMember) {
-      const message = translationService.t(guildId, 'messages.invalidMember');
-      await interaction.reply({ content: message, ephemeral: true });
-      return;
-    }
-
-    if (!moderator || !interaction.guild.members.me) {
-      const message = translationService.t(guildId, 'messages.noPermission');
-      await interaction.reply({ content: message, ephemeral: true });
-      return;
-    }
-
     try {
-      await targetMember.kick(`Kicked by ${interaction.user.username}: ${reason}`);
+      const targetUser = interaction.options.getUser('user');
+      const reason = interaction.options.getString('reason') || translationService.t(guildId, 'commands.kick.noReason');
 
-      const message = translationService.t(guildId, 'messages.kicked', {
-        user: targetUser.toString()
-      });
+      if (!targetUser || !interaction.guild) {
+        const errorTitle = translationService.t(guildId, 'common.error');
+        const errorDesc = translationService.t(guildId, 'commands.kick.invalidUser');
+        const embed = EmbedBuilder.error(errorTitle, errorDesc, interaction);
+        await interaction.reply({ embeds: [embed], ephemeral: true });
+        return;
+      }
 
-      await interaction.reply({ content: message });
+      const moderator = interaction.member;
+      const targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
+
+      if (targetUser.id === interaction.user.id) {
+        const errorTitle = translationService.t(guildId, 'common.actionDenied');
+        const errorDesc = translationService.t(guildId, 'commands.kick.selfKick');
+        const embed = EmbedBuilder.error(errorTitle, errorDesc, interaction);
+        await interaction.reply({ embeds: [embed], ephemeral: true });
+        return;
+      }
+
+      if (targetUser.id === interaction.guild.ownerId) {
+        const errorTitle = translationService.t(guildId, 'common.actionDenied');
+        const errorDesc = translationService.t(guildId, 'commands.kick.ownerKick');
+        const embed = EmbedBuilder.error(errorTitle, errorDesc, interaction);
+        await interaction.reply({ embeds: [embed], ephemeral: true });
+        return;
+      }
+
+      if (!targetMember) {
+        const errorTitle = translationService.t(guildId, 'common.error');
+        const errorDesc = translationService.t(guildId, 'commands.kick.memberNotFound');
+        const embed = EmbedBuilder.error(errorTitle, errorDesc, interaction);
+        await interaction.reply({ embeds: [embed], ephemeral: true });
+        return;
+      }
+
+      if (!moderator || !interaction.guild.members.me) {
+        const errorTitle = translationService.t(guildId, 'common.permissionDenied');
+        const errorDesc = translationService.t(guildId, 'commands.kick.noPermission');
+        const embed = EmbedBuilder.error(errorTitle, errorDesc, interaction);
+        await interaction.reply({ embeds: [embed], ephemeral: true });
+        return;
+      }
+
+      await targetMember.kick(`${interaction.user.username}: ${reason}`);
+
+      const title = translationService.t(guildId, 'commands.kick.title');
+      const description = translationService.t(guildId, 'commands.kick.successDescription', { user: targetUser.username });
+      const userLabel = translationService.t(guildId, 'commands.kick.userLabel');
+      const reasonLabel = translationService.t(guildId, 'commands.kick.reasonLabel');
+
+      const embed = EmbedBuilder.kick(title, description, userLabel, reasonLabel, targetUser.username, reason, interaction);
+
+      await interaction.reply({ embeds: [embed] });
+      
     } catch (error) {
-      const message = translationService.t(guildId, 'messages.error', {
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-
-      await interaction.reply({ content: message, ephemeral: true });
+      console.error('Error in kick command:', error);
+      
+      const errorTitle = translationService.t(guildId, 'common.error');
+      const errorDesc = translationService.t(guildId, 'commands.kick.error');
+      const embed = EmbedBuilder.error(errorTitle, errorDesc, interaction);
+      
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({ embeds: [embed], ephemeral: true });
+      } else if (interaction.deferred) {
+        await interaction.editReply({ embeds: [embed] });
+      }
     }
   }
 }

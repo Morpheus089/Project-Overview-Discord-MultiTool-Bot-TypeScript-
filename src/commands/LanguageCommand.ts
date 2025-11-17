@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import { Command } from '../structures/Command';
+import { EmbedBuilder } from '../utils/EmbedBuilder';
 
 export class LanguageCommand extends Command {
   constructor() {
@@ -33,38 +34,49 @@ export class LanguageCommand extends Command {
     const guildId = interaction.guild?.id || '';
     const translationService = (this.bot as any).translationService;
     
-    const language = interaction.options.getString('language');
-    
-    if (!language) {
-      const currentLang = await translationService.getGuildLanguage(guildId);
-      const message = translationService.t(guildId, 'commands.language.current', {
-        lang: currentLang.toUpperCase()
-      });
-      
-      await interaction.reply({ content: message, ephemeral: true });
-      return;
-    }
-
-    if (!translationService.getAvailableLanguages().includes(language)) {
-      const message = translationService.t(guildId, 'commands.language.invalid');
-      await interaction.reply({ content: message, ephemeral: true });
-      return;
-    }
-
     try {
-      await translationService.setGuildLanguage(guildId, language);
-      const message = translationService.t(guildId, 'commands.language.success', {
-        lang: language.toUpperCase()
-      });
+      const language = interaction.options.getString('language');
+      const currentLang = await translationService.getGuildLanguage(guildId);
       
-      await interaction.reply({ content: message });
+      if (!language) {
+        const title = translationService.t(guildId, 'commands.language.currentTitle');
+        const description = translationService.t(guildId, 'commands.language.currentDescription', { lang: currentLang.toUpperCase() });
+        const embed = EmbedBuilder.language('current', title, description, interaction);
+        
+        await interaction.reply({ embeds: [embed], ephemeral: true });
+        return;
+      }
+
+      if (!translationService.getAvailableLanguages().includes(language)) {
+        const title = translationService.t(guildId, 'commands.language.errorTitle');
+        const description = translationService.t(guildId, 'commands.language.errorDescription');
+        const embed = EmbedBuilder.language('error', title, description, interaction);
+        
+        await interaction.reply({ embeds: [embed], ephemeral: true });
+        return;
+      }
+
+      await translationService.setGuildLanguage(guildId, language);
+      
+      const title = translationService.t(language, 'commands.language.successTitle');
+      const description = translationService.t(language, 'commands.language.successDescription', { lang: language.toUpperCase() });
+      const embed = EmbedBuilder.language('success', title, description, interaction);
+      
+      await interaction.reply({ embeds: [embed] });
+      
     } catch (error) {
       console.error('Error setting language:', error);
-      const message = translationService.t(guildId, 'messages.error', {
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      const embed = EmbedBuilder.error(
+        'Error',
+        'An error occurred while changing the language.',
+        interaction
+      );
       
-      await interaction.reply({ content: message, ephemeral: true });
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({ embeds: [embed], ephemeral: true });
+      } else if (interaction.deferred) {
+        await interaction.editReply({ embeds: [embed] });
+      }
     }
   }
 }

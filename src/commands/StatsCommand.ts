@@ -1,5 +1,6 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import { Command } from '../structures/Command';
+import { EmbedBuilder } from '../utils/EmbedBuilder';
 
 export class StatsCommand extends Command {
   constructor() {
@@ -21,6 +22,8 @@ export class StatsCommand extends Command {
     const translationService = (this.bot as any).translationService;
     
     try {
+      await interaction.deferReply();
+      
       const client = interaction.client;
       const uptime = this.formatUptime(this.bot.uptime);
       const memoryUsage = process.memoryUsage();
@@ -29,26 +32,42 @@ export class StatsCommand extends Command {
       const guilds = client.guilds.cache.size;
       const users = client.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0);
 
-      const message = translationService.t(guildId, 'messages.botStats', {
+      const title = translationService.t(guildId, 'commands.stats.title');
+      const serversLabel = translationService.t(guildId, 'commands.stats.serversLabel');
+      const usersLabel = translationService.t(guildId, 'commands.stats.usersLabel');
+      const memoryLabel = translationService.t(guildId, 'commands.stats.memoryLabel');
+      const uptimeLabel = translationService.t(guildId, 'commands.stats.uptimeLabel');
+
+      const embed = EmbedBuilder.stats(
+        title,
+        serversLabel,
+        usersLabel,
+        memoryLabel,
+        uptimeLabel,
+        guilds,
+        users,
         uptime,
-        guilds: guilds.toLocaleString(),
-        users: users.toLocaleString(),
-        memory: `${memoryUsageMB}MB`
-      });
+        `${memoryUsageMB}MB`,
+        interaction
+      );
 
-      const embed = new EmbedBuilder()
-        .setDescription(message)
-        .setColor(0x5865F2)
-        .setThumbnail(client.user?.displayAvatarURL({ size: 256 }))
-        .setTimestamp();
-
-      await interaction.reply({ embeds: [embed] });
+      await interaction.editReply({ embeds: [embed] });
     } catch (error) {
-      const message = translationService.t(guildId, 'messages.error', {
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      console.error('Error in stats command:', error);
       
-      await interaction.reply({ content: message, ephemeral: true });
+      try {
+        const errorTitle = translationService.t(guildId, 'common.error');
+        const errorDesc = translationService.t(guildId, 'commands.stats.error');
+        const embed = EmbedBuilder.error(errorTitle, errorDesc, interaction);
+        
+        if (interaction.deferred) {
+          await interaction.editReply({ embeds: [embed] });
+        } else if (!interaction.replied) {
+          await interaction.reply({ embeds: [embed], ephemeral: true });
+        }
+      } catch (replyError) {
+        console.error('Error sending error response:', replyError);
+      }
     }
   }
 
@@ -60,7 +79,7 @@ export class StatsCommand extends Command {
 
     const parts = [];
     
-    if (days > 0) parts.push(`${days}d`);
+    if (days > 0) parts.push(`${days}j`);
     if (hours % 24 > 0) parts.push(`${hours % 24}h`);
     if (minutes % 60 > 0) parts.push(`${minutes % 60}m`);
     if (seconds % 60 > 0) parts.push(`${seconds % 60}s`);

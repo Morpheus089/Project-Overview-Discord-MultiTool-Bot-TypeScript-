@@ -1,6 +1,7 @@
 import { Event } from '../structures/Event';
 import { ChatInputCommandInteraction } from 'discord.js';
 import { CommandManager } from '../managers/CommandManager';
+import { EmbedBuilder } from '../utils/EmbedBuilder';
 
 export class InteractionCreateEvent extends Event {
   private readonly commandManager: CommandManager;
@@ -28,16 +29,24 @@ export class InteractionCreateEvent extends Event {
     } catch (error) {
       console.error('Slash command error:', error);
       
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({
-          content: 'An error occurred while executing this command.',
-          ephemeral: true
-        });
-      } else {
-        await interaction.followUp({
-          content: 'An error occurred while executing this command.',
-          ephemeral: true
-        });
+      // Ne pas essayer de répondre si l'interaction a déjà été traitée
+      if (interaction.replied || interaction.deferred) {
+        console.log('Interaction already processed, skipping error response');
+        return;
+      }
+
+      // Gestion spécifique des erreurs connues
+      const errorMessage = this.getErrorMessage(error);
+      const embed = EmbedBuilder.error(
+        'Erreur de Commande',
+        errorMessage,
+        interaction
+      );
+
+      try {
+        await interaction.reply({ embeds: [embed], ephemeral: true });
+      } catch (replyError) {
+        console.error('Error sending error response:', replyError);
       }
     }
   }
@@ -45,15 +54,45 @@ export class InteractionCreateEvent extends Event {
   private async handleInteractionError(interaction: any, error: any): Promise<void> {
     console.error('Interaction error:', error);
 
+    // Ne pas essayer de répondre si l'interaction a déjà été traitée
+    if (interaction.replied || interaction.deferred) {
+      console.log('Interaction already processed, skipping error response');
+      return;
+    }
+
     try {
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({
-          content: 'An unexpected error occurred.',
-          ephemeral: true
-        });
-      }
+      const errorMessage = this.getErrorMessage(error);
+      const embed = EmbedBuilder.error(
+        'Erreur Inconnue',
+        errorMessage,
+        interaction
+      );
+      
+      await interaction.reply({ embeds: [embed], ephemeral: true });
     } catch (responseError) {
       console.error('Error sending error response:', responseError);
     }
+  }
+
+  private getErrorMessage(error: any): string {
+    // Gestion spécifique des erreurs connues
+    if (error.code === 10062) {
+      return '❌ Cette interaction a expiré. Veuillez réessayer la commande.';
+    }
+    
+    if (error.code === 40060) {
+      return '❌ Cette interaction a déjà été traitée.';
+    }
+
+    if (error.message?.includes('Unknown interaction')) {
+      return '❌ Interaction inconnue ou expirée. Veuillez réessayer.';
+    }
+
+    if (error.message?.includes('Already acknowledged')) {
+      return '❌ Cette interaction a déjà été traitée.';
+    }
+
+    // Erreur générique
+    return `❌ Une erreur s'est produite: ${error.message || 'Erreur inconnue'}`;
   }
 }

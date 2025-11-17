@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import { Command } from '../structures/Command';
+import { EmbedBuilder } from '../utils/EmbedBuilder';
 
 export class PingCommand extends Command {
   constructor() {
@@ -17,23 +18,48 @@ export class PingCommand extends Command {
   }
 
   public async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    const startTime = Date.now();
     const guildId = interaction.guild?.id || '';
     const translationService = (this.bot as any).translationService;
     
-    const response = translationService.t(guildId, 'messages.pong', {
-      latency: '...'
-    });
+    const startTime = Date.now();
     
-    await interaction.reply(response);
-    
-    const endTime = Date.now();
-    const latency = endTime - startTime;
-    
-    const finalMessage = translationService.t(guildId, 'messages.pong', {
-      latency: latency.toString()
-    });
-    
-    await interaction.editReply(finalMessage);
+    try {
+      await interaction.deferReply();
+      
+      const endTime = Date.now();
+      const latency = endTime - startTime;
+      
+      const title = translationService.t(guildId, 'commands.ping.title');
+      const latencyLabel = translationService.t(guildId, 'commands.ping.latencyLabel');
+      const statusLabel = translationService.t(guildId, 'commands.ping.statusLabel');
+      const statusText = this.getPingStatus(latency, guildId, translationService);
+      
+      const embed = EmbedBuilder.ping(latency, title, latencyLabel, statusLabel, statusText, interaction);
+      
+      await interaction.editReply({ embeds: [embed] });
+    } catch (error) {
+      console.error('Error in ping command:', error);
+      
+      try {
+        const errorTitle = translationService.t(guildId, 'common.error');
+        const errorDesc = translationService.t(guildId, 'commands.ping.error');
+        const embed = EmbedBuilder.error(errorTitle, errorDesc, interaction);
+        
+        if (interaction.deferred) {
+          await interaction.editReply({ embeds: [embed] });
+        } else if (!interaction.replied) {
+          await interaction.reply({ embeds: [embed], ephemeral: true });
+        }
+      } catch (replyError) {
+        console.error('Error sending error response:', replyError);
+      }
+    }
+  }
+
+  private getPingStatus(latency: number, guildId: string, translationService: any): string {
+    if (latency < 50) return translationService.t(guildId, 'commands.ping.statusExcellent');
+    if (latency < 100) return translationService.t(guildId, 'commands.ping.statusGood');
+    if (latency < 200) return translationService.t(guildId, 'commands.ping.statusAverage');
+    return translationService.t(guildId, 'commands.ping.statusSlow');
   }
 }
